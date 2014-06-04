@@ -28,7 +28,7 @@ python decodepage.py http://www.baidu.com 看效果。
 import re
 import sys
 import codecs
-#import chardet
+import chardet
 
 # 忽略js里的meta，例如这个页面：http://www.xx007.com/inc/print.js
 # meta_re = re.compile(r"""<meta[a-zA-Z\-="\s/;]+charset\s*=\s*['"]?\s*([^"'>\s]+)\s*['"]?""",re.I)
