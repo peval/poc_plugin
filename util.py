@@ -21,10 +21,17 @@ try:
 except ImportError:
     class PARAM_CONFIG:
         EXCLUDE = '{}'
-        TIMEOUT = 20
+        TIMEOUT = 30
         THRESHOLD_ENABLED = False
         THRESHOLD_LIST = ""
         PROXY = ""
+        class HTTP_HEADER:
+            COOKIE = ""
+            COOKIES_FILE = ""    
+            USER_AGENT = "Mozilla/5.0 (Windows; U; Windows NT 5.1; zh-CN; rv:1.9.1.1) Gecko/20090715 Firefox/3.5.1"
+            REFERER = ""
+            HEADERS = ""
+            HOST_BIND = ""
 
 # 由于_fileobject不能直接使用，因此模拟实现一个Url重定向后的Reponse类
 class _RedirectResponse:
@@ -84,9 +91,12 @@ def sendHttpRequest(uri,
     data=None,
     urlEncode=True,
     redirect=True, 
-    timeout=1):
+    timeout=20):
     timeout = timeout if timeout < PARAM_CONFIG.TIMEOUT else PARAM_CONFIG.TIMEOUT
     socket.setdefaulttimeout(timeout)
+
+    if -1 == uri.strip().find("http://") and -1 == uri.strip().find("https://"):
+        uri = "http://" + uri
 
     if PARAM_CONFIG.PROXY:
         proxyList = PARAM_CONFIG.PROXY.strip().split(",")
@@ -105,7 +115,10 @@ def sendHttpRequest(uri,
     else:
         redirectHandler = UnredirectHandler
 
-    request = urllib2.Request(uri)
+    if urlEncode:
+        request = urllib2.Request(urlEncodeEx(uri))
+    else:
+        request = urllib2.Request(uri)
 
     if headers:
         if type(headers) == type({}):
@@ -114,13 +127,19 @@ def sendHttpRequest(uri,
         else:
             return 0, None, None, None, HTTP_STATUS_INVALID_PARAM
 
+    # PARAM_CONFIG.HTTP_HEADER.USER_AGENT
+    # Mozilla/5.0 (Windows; U; Windows NT 5.1; zh-CN; rv:1.9.1.1) Gecko/20090715 Firefox/3.5.1
+    if not headers or (not headers.get("User-Agent", "") and not headers.get("user-agent", "")):
+        request.add_header("User-Agent", PARAM_CONFIG.HTTP_HEADER.USER_AGENT)
+
     if data:
         if urlEncode:
             try:
-                urlEncodedData = urllib.urlencode(data)
-            except e:
+                data = dataUrlEncode(data)
+            except Exception, e:
+                print e
                 return 0, None, None, None, HTTP_STATUS_INVALID_PARAM
-            request.add_data(urlEncodedData)
+        request.add_data(data)
 
     if method.upper() != "GET" and method.upper() != "POST" :
         request.get_method = lambda: method.upper()
@@ -231,8 +250,25 @@ def htmlDecode(header, body):
     body = decodepage.getUnicodePage(body, charset)
     return header, body
 
-def urlEncode(content):
-    return urllib2.urlencode(content)
+def urlEncodeEx(url):
+    #return urllib2.urlencode(content)
+    urlElements = urlparse.urlparse(url)
+    if not urlElements.query:
+        return url
+
+    pairList = urlparse.parse_qsl(urlElements.query, True)
+    queryEncoded = urllib.urlencode(pairList)
+
+    return urlparse.urlunparse((urlElements.scheme, 
+        urlElements.netloc, 
+        urlElements.path,
+        urlElements.params,
+        queryEncoded,
+        urlElements.fragment))
+
+def dataUrlEncode(data):
+    pairList = urlparse.parse_qsl(data, True)
+    return urllib.urlencode(pairList)
 
 def md5(message):
     if type(message) != type(""):
@@ -263,12 +299,12 @@ if __name__ == "__main__":
     else:
         print u
     '''
-
+    
     # sendHttpRequest test
-    code, headers, body, location, error = sendHttpRequest("http://mango.lub4r.cc/2/upload/forum.php",
-        {"Cookie": "test=1 2 3", "Content-Length": 123},
-        data={"name": "zhaodaichong", "password": "123456", "test": "x y z ?"},
-        method="PUT",
+    code, headers, body, location, error = sendHttpRequest("http://www.yoqoo.com",
+        #headers={"User-Agent": "test"},
+        method="GET",
+        #data="a=1' and '1'='1&b=2&c=3 4&d=5\r\ntest\r\ntest1\r\ntest2",
         urlEncode=False,
         redirect=False)
 
@@ -279,4 +315,8 @@ if __name__ == "__main__":
         print "headers:"
         print headers
         if body:
-            print "body (512bytes tr\uncated):%s" % (body[:512])
+            print "body (512bytes truncated):%s" % (body[:512])
+    '''
+    # urlEncode test
+    print urlEncodeEx("https://username:passwd@www.baidu.com:8080/index.php?a=1' and '1'='1&b=2&c=3 4&d=5&e&f=&g#hash")
+    '''
